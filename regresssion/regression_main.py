@@ -7,9 +7,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, accuracy_score
 
 # Load csv data
-sales_data = pd.read_csv('sales_15.csv')
-customers_data = pd.read_csv('customers_15.csv')
-products_data = pd.read_csv('products_15.csv')
+sales_data = pd.read_csv('datas/sales_15.csv')
+customers_data = pd.read_csv('datas/customers_15.csv')
+products_data = pd.read_csv('datas/products_15.csv')
 
 print(sales_data.head())
 

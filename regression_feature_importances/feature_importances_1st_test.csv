@@ -1,9 +1,0 @@
-Feature,Importance
-num__Age,0.2301909417555785
-num__Price,0.73368248313624
-cat__Gender_M,0.009102601949143316
-cat__Payment method_Credit Card,0.006067598865322279
-cat__Payment method_Mobile Payment,0.005572116880869656
-cat__Shopping mall_MK,0.005039465951163473
-cat__Shopping mall_ST,0.0056821884382482245
-cat__Shopping mall_TKO,0.0046626030234346244
