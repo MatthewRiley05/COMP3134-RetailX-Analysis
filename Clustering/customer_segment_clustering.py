@@ -121,14 +121,13 @@ customers_after = len(cluster_data)
 customers_removed = customers_before - customers_after
 
 if customers_removed > 0:
-    print(f"\n⚠️  Filtered out {customers_removed} customers with no purchase history")
-    print("   (These are registered customers who haven't made any purchases yet)")
-    print(f"   Clustering will be performed on {customers_after} active customers")
+    print(f"\nFiltered out {customers_removed} customers with no purchase history")
+    print(f"Clustering will be performed on {customers_after} active customers")
 
 cluster_data.fillna(0, inplace=True)
 
 # Select Clustering Features
-print("\nSelecting clustering features (behavioral focus)...")
+print("\nSelecting clustering features...")
 
 rfm_features = ["Recency", "Frequency", "Monetary"]
 
@@ -150,7 +149,7 @@ clustering_features = (
 
 holdout_features = ["Gender", "Payment method"]
 
-print(f"\n✓ Clustering features selected ({len(clustering_features)} total):")
+print(f"\nClustering features selected ({len(clustering_features)} total):")
 print(f"  - Core RFM: {rfm_features}")
 print(f"  - Category mix: {category_features}")
 if dropped_category:
@@ -158,25 +157,23 @@ if dropped_category:
 print(f"  - Location mix: {mall_features}")
 if dropped_mall:
     print(f"    (dropped {dropped_mall} to avoid collinearity)")
-print(f"  - Demographics: {demographic_features} (z-scored)")
-print("\n✓ Hold-out features for post-clustering profiling:")
+print(f"  - Demographics: {demographic_features}")
+print("\nHold-out features for post-clustering profiling:")
 print(f"  {holdout_features}")
 
 X_cluster = cluster_data[clustering_features].copy()
 
-print(f"\n✓ Clustering matrix shape: {X_cluster.shape}")
-print("\nSample of clustering features:")
-print(X_cluster.head())
+print(f"\nClustering matrix shape: {X_cluster.shape}")
 
 # Save Prepared Data
 output_file = os.path.join(script_dir, "cluster_ready_data.csv")
 cluster_data.to_csv(output_file, index=False)
-print(f"\n✓ Full dataset saved to {output_file}")
+print(f"\nFull dataset saved to {output_file}")
 
 clustering_matrix_file = os.path.join(script_dir, "clustering_features.csv")
 clustering_output = cluster_data[["Customer id"] + clustering_features].copy()
 clustering_output.to_csv(clustering_matrix_file, index=False)
-print(f"✓ Clustering features saved to {clustering_matrix_file}")
+print(f"Clustering features saved to {clustering_matrix_file}")
 
 print("\nDataset summary:")
 print(f"  Total customers: {len(cluster_data)}")
@@ -206,7 +203,7 @@ X_scaled_df = pd.DataFrame(
     X_scaled, columns=X_transformed.columns, index=X_transformed.index
 )
 
-print(f"\n✓ Transformed feature matrix shape: {X_scaled_df.shape}")
+print(f"\nTransformed feature matrix shape: {X_scaled_df.shape}")
 print("\nTransformed feature statistics:")
 print(X_scaled_df.describe().round(2))
 
@@ -299,7 +296,7 @@ fig_elbow.update_layout(
 fig_elbow.show()
 
 optimal_k = list(k_range)[np.argmax(ch_scores)]
-print(f"\n✓ Recommended K based on Calinski-Harabasz: {optimal_k}")
+print(f"\nRecommended K based on Calinski-Harabasz: {optimal_k}")
 
 # K-Means Clustering
 print("\n" + "=" * 60)
@@ -309,14 +306,11 @@ print("=" * 60)
 kmeans_final = KMeans(n_clusters=optimal_k, random_state=42, n_init=20)
 cluster_data["Cluster"] = kmeans_final.fit_predict(X_scaled)
 
-print("\n✓ Clustering complete!")
+print("\nClustering complete!")
 print("\nCluster sizes:")
 print(cluster_data["Cluster"].value_counts().sort_index())
 
 # PCA Visualization
-print("\n" + "=" * 60)
-print("PCA VISUALIZATION")
-print("=" * 60)
 print("\n" + "=" * 60)
 print("PCA VISUALIZATION")
 print("=" * 60)
@@ -327,7 +321,7 @@ X_pca = pca.fit_transform(X_scaled)
 cluster_data["PCA1"] = X_pca[:, 0]
 cluster_data["PCA2"] = X_pca[:, 1]
 
-print("\n✓ PCA variance explained:")
+print("\nPCA variance explained:")
 print(f"  PC1: {pca.explained_variance_ratio_[0]:.1%}")
 print(f"  PC2: {pca.explained_variance_ratio_[1]:.1%}")
 print(f"  Total: {pca.explained_variance_ratio_.sum():.1%}")
@@ -390,207 +384,6 @@ payment_dist = pd.crosstab(
 )
 print((payment_dist * 100).round(1))
 
-# Cluster Naming & Interpretation
-print("\n" + "=" * 60)
-print("CLUSTER NAMING & INTERPRETATION")
-print("=" * 60)
-
-
-def name_cluster(cluster_id, profile_row, size):
-    """Generate business-friendly cluster names based on behavioral characteristics"""
-
-    recency = profile_row["Recency"]
-    frequency = profile_row["Frequency"]
-    monetary = profile_row["Monetary"]
-
-    cat_cols_list = [col for col in profile_row.index if col.startswith("Category_")]
-    if cat_cols_list:
-        dominant_category = max(cat_cols_list, key=lambda x: profile_row[x])
-        dominant_cat_name = dominant_category.replace("Category_", "")
-        cat_strength = profile_row[dominant_category]
-    else:
-        dominant_cat_name = "General"
-        cat_strength = 0
-
-    mall_cols_list = [col for col in profile_row.index if col.startswith("Mall_")]
-    if mall_cols_list:
-        dominant_mall = max(mall_cols_list, key=lambda x: profile_row[x])
-        mall_name = dominant_mall.replace("Mall_", "")
-    else:
-        mall_name = "Mixed"
-
-    is_high_value = monetary > profile_df["Monetary"].median()
-    is_frequent = frequency > profile_df["Frequency"].median()
-    is_recent = recency < profile_df["Recency"].median()
-
-    if is_high_value and is_frequent and is_recent:
-        tier = "VIP"
-    elif is_high_value and is_frequent:
-        tier = "Loyal High-Spender"
-    elif is_frequent and is_recent:
-        tier = "Frequent Shopper"
-    elif is_high_value:
-        tier = "High-Value"
-    elif is_recent and frequency > 1:
-        tier = "Active"
-    else:
-        tier = "Casual"
-
-    if cat_strength > 0.4:
-        category_desc = f"{dominant_cat_name}-Focused"
-    else:
-        category_desc = "Omni-Category"
-
-    cluster_name = f"{tier} {category_desc}"
-
-    return cluster_name
-
-
-cluster_names = {}
-cluster_characteristics = {}
-
-print("\nCluster Names & Key Characteristics:\n")
-for cluster_id in sorted(profile_df.index):
-    profile_row = profile_df.loc[cluster_id]
-    size = cluster_sizes[cluster_id]
-    size_pct = (size / len(cluster_data)) * 100
-
-    name = name_cluster(cluster_id, profile_row, size)
-    cluster_names[cluster_id] = name
-
-    chars = {
-        "Size": f"{size} customers ({size_pct:.1f}%)",
-        "Avg Spend": f"HKD {profile_row['Monetary']:.0f}",
-        "Avg Frequency": f"{profile_row['Frequency']:.1f} visits",
-        "Recency": f"{profile_row['Recency']:.0f} days",
-        "Avg Age": f"{profile_row['Age']:.0f} years",
-    }
-
-    cat_cols_list = [col for col in profile_row.index if col.startswith("Category_")]
-    if cat_cols_list:
-        top_cat = max(cat_cols_list, key=lambda x: profile_row[x])
-        chars["Top Category"] = (
-            f"{top_cat.replace('Category_', '')} ({profile_row[top_cat] * 100:.0f}%)"
-        )
-
-    mall_cols_list = [col for col in profile_row.index if col.startswith("Mall_")]
-    if mall_cols_list:
-        top_mall = max(mall_cols_list, key=lambda x: profile_row[x])
-        chars["Preferred Mall"] = (
-            f"{top_mall.replace('Mall_', '')} ({profile_row[top_mall] * 100:.0f}%)"
-        )
-
-    cluster_characteristics[cluster_id] = chars
-
-    print(f"📊 Cluster {cluster_id}: {name}")
-    print(f"   └─ {chars['Size']}")
-    print(
-        f"   └─ {chars['Avg Spend']} | {chars['Avg Frequency']} | Last visit: {chars['Recency']}"
-    )
-    print(
-        f"   └─ {chars.get('Top Category', 'N/A')} | {chars.get('Preferred Mall', 'N/A')}"
-    )
-    print()
-
-cluster_data["Cluster_Name"] = cluster_data["Cluster"].map(cluster_names)
-
-# Strategic Recommendations
-print("=" * 60)
-print("STRATEGIC RECOMMENDATIONS")
-print("=" * 60)
-
-profile_df["CLV_Score"] = (
-    profile_df["Monetary"] * profile_df["Frequency"] / (profile_df["Recency"] + 1)
-)
-target_cluster = profile_df["CLV_Score"].idxmax()
-target_name = cluster_names[target_cluster]
-
-print(f"\n🎯 TARGET SEGMENT: Cluster {target_cluster} - {target_name}")
-print("   Why: Highest CLV potential (Spend × Frequency / Recency)")
-print(f"   Size: {cluster_characteristics[target_cluster]['Size']}")
-print(f"   Value: {cluster_characteristics[target_cluster]['Avg Spend']}")
-print()
-
-print("\n💡 RECOMMENDED TACTICS BY SEGMENT:\n")
-
-for cluster_id in sorted(profile_df.index):
-    name = cluster_names[cluster_id]
-    profile_row = profile_df.loc[cluster_id]
-    chars = cluster_characteristics[cluster_id]
-
-    payment_pref = payment_dist.loc[cluster_id].idxmax()
-    payment_pct = payment_dist.loc[cluster_id].max() * 100
-
-    cat_cols_list = [col for col in profile_row.index if col.startswith("Category_")]
-    if cat_cols_list:
-        top_cat = max(cat_cols_list, key=lambda x: profile_row[x])
-        top_cat_name = top_cat.replace("Category_", "")
-        top_cat_pct = profile_row[top_cat] * 100
-    else:
-        top_cat_name = "General"
-        top_cat_pct = 0
-
-    mall_cols_list = [col for col in profile_row.index if col.startswith("Mall_")]
-    if mall_cols_list:
-        top_mall = max(mall_cols_list, key=lambda x: profile_row[x])
-        top_mall_name = top_mall.replace("Mall_", "")
-    else:
-        top_mall_name = "Mixed"
-
-    print(
-        f"{'🎯 ' if cluster_id == target_cluster else ''}Cluster {cluster_id}: {name}"
-    )
-    print(f"{'=' * 60}")
-
-    print("📈 ACQUISITION:")
-    if payment_pref == "Mobile Payment" and payment_pct > 50:
-        print(f"   → App-First Campaign: {payment_pct:.0f}% use mobile payment")
-        print(
-            f"      • Offer: Download app for HKD 50 welcome voucher on {top_cat_name}"
-        )
-        print(f"      • Channel: Social media ads targeting {top_mall_name} area")
-    elif top_cat_pct > 40:
-        print(f"   → Category-Targeted Ads: {top_cat_pct:.0f}% prefer {top_cat_name}")
-        print(f"      • Offer: 15% off first {top_cat_name} purchase + free shipping")
-        print("      • Channel: Google Shopping & Facebook lookalike audiences")
-    else:
-        print("   → Omnichannel Campaign: Diverse shopping behavior")
-        print("      • Offer: HKD 100 off first purchase over HKD 500")
-        print("      • Channel: Broad digital + in-mall signage at {top_mall_name}")
-
-    print()
-
-    print("🔄 RETENTION:")
-    if (
-        profile_row["Frequency"] > profile_df["Frequency"].median()
-        and profile_row["Monetary"] > profile_df["Monetary"].median()
-    ):
-        print(
-            f"   → VIP Loyalty Program: High frequency ({profile_row['Frequency']:.1f}) & spend (HKD {profile_row['Monetary']:.0f})"
-        )
-        print("      • Offer: Early access to sales + free gift after 3 purchases")
-        print(
-            f"      • Trigger: Automated after reaching HKD {profile_row['Monetary'] * 0.8:.0f} spend"
-        )
-    elif profile_row["Recency"] > profile_df["Recency"].median():
-        print(
-            f"   → Win-Back Campaign: {profile_row['Recency']:.0f} days since last visit"
-        )
-        print(f"      • Offer: 'We miss you' - 20% off {top_cat_name} valid 7 days")
-        print("      • Channel: Email + SMS if opted in")
-    elif top_cat_pct > 40:
-        print(
-            f"   → Category Bundle Deals: Strong {top_cat_name} preference ({top_cat_pct:.0f}%)"
-        )
-        print(f"      • Offer: Buy 2 {top_cat_name} items, get 10% off total basket")
-        print(f"      • Timing: Monthly on {payment_pref} paydays")
-    else:
-        print("   → Points-Based Loyalty: Moderate engagement")
-        print("      • Offer: 1 point per HKD 10, redeem at 100 points")
-        print(f"      • Channel: {payment_pref}-enabled digital wallet integration")
-
-    print()
-
 # Positioning Map
 print("\n" + "=" * 60)
 print("POSITIONING MAP VISUALIZATION")
@@ -611,24 +404,6 @@ fig_positioning = px.scatter(
     color_discrete_sequence=px.colors.qualitative.Bold,
     size_max=60,
 )
-
-for idx, row in profile_df.reset_index().iterrows():
-    cluster_id = row["Cluster"]
-    fig_positioning.add_annotation(
-        x=row["Frequency"],
-        y=row["Monetary"],
-        text=f"<b>{cluster_names[cluster_id]}</b><br>{cluster_sizes[cluster_id]} customers",
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1,
-        arrowwidth=2,
-        arrowcolor="gray",
-        ax=0,
-        ay=-50 if idx % 2 == 0 else 50,
-        font=dict(size=10, color="black"),
-        bgcolor="white",
-        opacity=0.9,
-    )
 
 fig_positioning.update_traces(
     marker=dict(line=dict(width=2, color="white")),
@@ -660,40 +435,18 @@ print("=" * 60)
 
 clustered_file = os.path.join(script_dir, "clustered_customers.csv")
 cluster_data.to_csv(clustered_file, index=False)
-print(f"\n✓ Clustered customer data saved to {clustered_file}")
+print(f"\nClustered customer data saved to {clustered_file}")
 
-profile_df["Cluster_Name"] = profile_df.index.map(cluster_names)
 profile_df["Size"] = profile_df.index.map(cluster_sizes)
 profile_df["Size_Pct"] = (profile_df["Size"] / len(cluster_data) * 100).round(1)
 
 profile_file = os.path.join(script_dir, "cluster_profiles.csv")
 profile_df.to_csv(profile_file)
-print(f"✓ Cluster profiles saved to {profile_file}")
-
-recommendations = []
-for cluster_id in sorted(profile_df.index):
-    recommendations.append(
-        {
-            "Cluster": cluster_id,
-            "Name": cluster_names[cluster_id],
-            "Size": cluster_characteristics[cluster_id]["Size"],
-            "Avg_Spend": cluster_characteristics[cluster_id]["Avg Spend"],
-            "Avg_Frequency": cluster_characteristics[cluster_id]["Avg Frequency"],
-            "Is_Target_Segment": "✓" if cluster_id == target_cluster else "",
-        }
-    )
-
-recommendations_df = pd.DataFrame(recommendations)
-recommendations_file = os.path.join(script_dir, "segment_recommendations.csv")
-recommendations_df.to_csv(recommendations_file, index=False)
-print(f"✓ Segment recommendations saved to {recommendations_file}")
+print(f"Cluster profiles saved to {profile_file}")
 
 print("\n" + "=" * 60)
 print("CLUSTERING COMPLETE!")
 print("=" * 60)
-print("\n📁 Files generated:")
+print("\nFiles generated:")
 print(f"  1. {clustered_file}")
 print(f"  2. {profile_file}")
-print(f"  3. {recommendations_file}")
-print(f"\n🎯 Target Segment: Cluster {target_cluster} - {target_name}")
-print("📊 Ready for presentation! Interactive visualizations displayed above.")
