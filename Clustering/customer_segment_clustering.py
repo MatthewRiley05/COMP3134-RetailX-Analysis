@@ -1,8 +1,3 @@
-"""
-Customer Clustering - Optimized ETL & K-Means Segmentation
-Transforms sales data into RFM metrics, location/category proportions, and actionable segments
-"""
-
 import os
 import pandas as pd
 import numpy as np
@@ -15,12 +10,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# ===========================
-# 1. LOAD DATA
-# ===========================
-# Get the directory where this script is located
+# Load Data
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Get the parent directory (project root)
 project_root = os.path.dirname(script_dir)
 
 print("Loading data...")
@@ -28,24 +19,17 @@ customers = pd.read_csv(os.path.join(project_root, "customers_15.csv"))
 sales = pd.read_csv(os.path.join(project_root, "sales_15.csv"))
 products = pd.read_csv(os.path.join(project_root, "products_15.csv"))
 
-# ===========================
-# 2. EXPLODE THE BASKET
-# ===========================
+# Separate Sections
 print("Exploding product baskets...")
-# Split comma-separated Product id list into rows
 sales_exploded = sales.copy()
 sales_exploded["Product id"] = sales_exploded["Product id list"].str.split(",")
 sales_exploded = sales_exploded.explode("Product id")
 sales_exploded["Product id"] = sales_exploded["Product id"].str.strip()
 
-# Join with products to get Category and Price
 sales_with_products = sales_exploded.merge(products, on="Product id", how="left")
 
-# ===========================
-# 3. INVOICE TOTALS
-# ===========================
+# Calculate Invoice Totals
 print("Calculating invoice totals...")
-# Sum Price per Invoice no to get invoice value
 invoice_totals = (
     sales_with_products.groupby(
         ["Invoice no", "Customer id", "Invoice date", "Shopping mall"]
@@ -55,77 +39,59 @@ invoice_totals = (
 )
 invoice_totals.rename(columns={"Price": "Invoice Value"}, inplace=True)
 
-# ===========================
-# 4. TIME & RECENCY
-# ===========================
+# Compute Recency
 print("Computing recency...")
-# Parse Invoice date (DD/MM/YYYY)
 invoice_totals["Invoice date"] = pd.to_datetime(
     invoice_totals["Invoice date"], format="%d/%m/%Y"
 )
 
-# Find the maximum date in the dataset
 max_date = invoice_totals["Invoice date"].max()
 
-# Compute Recency per customer = days since last purchase
 customer_recency = (
     invoice_totals.groupby("Customer id").agg({"Invoice date": "max"}).reset_index()
 )
 customer_recency["Recency"] = (max_date - customer_recency["Invoice date"]).dt.days
 
-# ===========================
-# 5. LOCATION PROPORTIONS
-# ===========================
+# Location Proportions
 print("Calculating location proportions...")
-# Count invoices per Shopping mall per customer
 location_counts = (
     invoice_totals.groupby(["Customer id", "Shopping mall"])
     .size()
     .reset_index(name="Count")
 )
 
-# Pivot to get malls as columns
 location_pivot = location_counts.pivot(
     index="Customer id", columns="Shopping mall", values="Count"
 ).fillna(0)
 
-# Convert to proportions (share of visits)
 location_proportions = location_pivot.div(location_pivot.sum(axis=1), axis=0)
 location_proportions.columns = [f"Mall_{col}" for col in location_proportions.columns]
 
-# ===========================
-# 6. CATEGORY MIX
-# ===========================
+# Category Spend Proportions
 print("Calculating category spend proportions...")
-# Sum spend by category per customer
 category_spend = (
     sales_with_products.groupby(["Customer id", "Category"])
     .agg({"Price": "sum"})
     .reset_index()
 )
 
-# Pivot to get categories as columns
 category_pivot = category_spend.pivot(
     index="Customer id", columns="Category", values="Price"
 ).fillna(0)
 
-# Convert to spend proportions
 category_proportions = category_pivot.div(category_pivot.sum(axis=1), axis=0)
 category_proportions.columns = [
     f"Category_{col}" for col in category_proportions.columns
 ]
 
-# ===========================
-# 7. RFM METRICS
-# ===========================
+# RFM Metrics
 print("Computing RFM metrics...")
-# Aggregate by Customer id
 rfm = (
     invoice_totals.groupby("Customer id")
     .agg(
         {
-            "Invoice no": "count",  # Frequency
-            "Invoice Value": "sum",  # Monetary
+            "Invoice no": "count",
+            "Invoice Value": "sum",
         }
     )
     .reset_index()
@@ -135,29 +101,20 @@ rfm.rename(
     columns={"Invoice no": "Frequency", "Invoice Value": "Monetary"}, inplace=True
 )
 
-# Add Recency
 rfm = rfm.merge(
     customer_recency[["Customer id", "Recency"]], on="Customer id", how="left"
 )
 
-# ===========================
-# 8. COMBINE ALL FEATURES
-# ===========================
+# Combine All Features
 print("Combining all features...")
-# Start with customer base
 cluster_data = customers[["Customer id", "Gender", "Age", "Payment method"]].copy()
 
-# Merge RFM
 cluster_data = cluster_data.merge(rfm, on="Customer id", how="left")
 
-# Merge location proportions
 cluster_data = cluster_data.merge(location_proportions, on="Customer id", how="left")
 
-# Merge category proportions
 cluster_data = cluster_data.merge(category_proportions, on="Customer id", how="left")
 
-# FILTER OUT CUSTOMERS WITH NO PURCHASE HISTORY
-# These are customers in the database but with no transactions (Frequency = NaN)
 customers_before = len(cluster_data)
 cluster_data = cluster_data[cluster_data["Frequency"].notna()].copy()
 customers_after = len(cluster_data)
@@ -165,41 +122,32 @@ customers_removed = customers_before - customers_after
 
 if customers_removed > 0:
     print(f"\n⚠️  Filtered out {customers_removed} customers with no purchase history")
-    print(f"   (These are registered customers who haven't made any purchases yet)")
+    print("   (These are registered customers who haven't made any purchases yet)")
     print(f"   Clustering will be performed on {customers_after} active customers")
 
-# Fill any remaining NaN values with 0 (for proportions where customer bought from some but not all malls/categories)
 cluster_data.fillna(0, inplace=True)
 
-# ===========================
-# 9. SELECT CLUSTERING FEATURES
-# ===========================
+# Select Clustering Features
 print("\nSelecting clustering features (behavioral focus)...")
 
-# Core RFM features
 rfm_features = ["Recency", "Frequency", "Monetary"]
 
-# Category proportion features (drop one to avoid perfect collinearity)
 category_cols = [col for col in cluster_data.columns if col.startswith("Category_")]
-category_features = category_cols[:-1]  # Drop last category column
+category_features = category_cols[:-1]
 dropped_category = category_cols[-1] if category_cols else None
 
-# Mall proportion features (drop one to avoid perfect collinearity)
 mall_cols = [col for col in cluster_data.columns if col.startswith("Mall_")]
-mall_features = mall_cols[:-1]  # Drop last mall column
+mall_features = mall_cols[:-1]
 dropped_mall = mall_cols[-1] if mall_cols else None
 
-# Optional: Age (will be z-scored for scale compatibility)
 age_scaler = StandardScaler()
 cluster_data["Age_scaled"] = age_scaler.fit_transform(cluster_data[["Age"]])
 demographic_features = ["Age_scaled"]
 
-# Combine all clustering features
 clustering_features = (
     rfm_features + category_features + mall_features + demographic_features
 )
 
-# Hold-out features for profiling (not used in clustering)
 holdout_features = ["Gender", "Payment method"]
 
 print(f"\n✓ Clustering features selected ({len(clustering_features)} total):")
@@ -214,22 +162,17 @@ print(f"  - Demographics: {demographic_features} (z-scored)")
 print("\n✓ Hold-out features for post-clustering profiling:")
 print(f"  {holdout_features}")
 
-# Create clustering dataset
 X_cluster = cluster_data[clustering_features].copy()
 
 print(f"\n✓ Clustering matrix shape: {X_cluster.shape}")
 print("\nSample of clustering features:")
 print(X_cluster.head())
 
-# ===========================
-# 10. SAVE OUTPUTS
-# ===========================
-# Save full cluster-ready data with all features
+# Save Prepared Data
 output_file = os.path.join(script_dir, "cluster_ready_data.csv")
 cluster_data.to_csv(output_file, index=False)
 print(f"\n✓ Full dataset saved to {output_file}")
 
-# Save clustering feature matrix
 clustering_matrix_file = os.path.join(script_dir, "clustering_features.csv")
 clustering_output = cluster_data[["Customer id"] + clustering_features].copy()
 clustering_output.to_csv(clustering_matrix_file, index=False)
@@ -240,28 +183,22 @@ print(f"  Total customers: {len(cluster_data)}")
 print(f"  Clustering features: {len(clustering_features)}")
 print(f"  Holdout features: {len(holdout_features)}")
 
-# ===========================
-# 11. TRANSFORM FEATURES FOR CLUSTERING
-# ===========================
+# Transform Features
 print("\n" + "=" * 60)
 print("FEATURE TRANSFORMATION")
 print("=" * 60)
 
-# Create a copy for transformation
 X_transformed = X_cluster.copy()
 
-# Log-transform RFM features to tame right skew
 print("\n1. Log-transforming RFM features (log1p)...")
 X_transformed["Recency"] = np.log1p(X_transformed["Recency"])
 X_transformed["Frequency"] = np.log1p(X_transformed["Frequency"])
 X_transformed["Monetary"] = np.log1p(X_transformed["Monetary"])
 
-# Winsorize extreme spend to avoid outlier destabilization
 print("2. Winsorizing extreme values (top 1%)...")
 for col in ["Recency", "Frequency", "Monetary"]:
     X_transformed[col] = mstats.winsorize(X_transformed[col], limits=[0, 0.01])
 
-# Standardize all features (z-score)
 print("3. Standardizing all features (z-score)...")
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_transformed)
@@ -273,9 +210,7 @@ print(f"\n✓ Transformed feature matrix shape: {X_scaled_df.shape}")
 print("\nTransformed feature statistics:")
 print(X_scaled_df.describe().round(2))
 
-# ===========================
-# 12. K SELECTION
-# ===========================
+# K-Selection
 print("\n" + "=" * 60)
 print("K SELECTION (Elbow & Calinski-Harabasz)")
 print("=" * 60)
@@ -298,7 +233,6 @@ for k in k_range:
         f"  K={k}: Inertia={kmeans.inertia_:.0f}, CH={ch_scores[-1]:.2f}, Silhouette={silhouette_scores[-1]:.3f}"
     )
 
-# Create elbow plot
 fig_elbow = make_subplots(
     rows=1,
     cols=3,
@@ -364,45 +298,40 @@ fig_elbow.update_layout(
 
 fig_elbow.show()
 
-# Recommend K based on CH score (maximum)
 optimal_k = list(k_range)[np.argmax(ch_scores)]
 print(f"\n✓ Recommended K based on Calinski-Harabasz: {optimal_k}")
 
-# ===========================
-# 13. RUN K-MEANS CLUSTERING
-# ===========================
+# K-Means Clustering
 print("\n" + "=" * 60)
 print(f"K-MEANS CLUSTERING (K={optimal_k})")
 print("=" * 60)
 
-# Run final K-means
 kmeans_final = KMeans(n_clusters=optimal_k, random_state=42, n_init=20)
 cluster_data["Cluster"] = kmeans_final.fit_predict(X_scaled)
 
-print(f"\n✓ Clustering complete!")
-print(f"\nCluster sizes:")
+print("\n✓ Clustering complete!")
+print("\nCluster sizes:")
 print(cluster_data["Cluster"].value_counts().sort_index())
 
-# ===========================
-# 14. PCA VISUALIZATION
-# ===========================
+# PCA Visualization
+print("\n" + "=" * 60)
+print("PCA VISUALIZATION")
+print("=" * 60)
 print("\n" + "=" * 60)
 print("PCA VISUALIZATION")
 print("=" * 60)
 
-# PCA to 2D for visualization
 pca = PCA(n_components=2, random_state=42)
 X_pca = pca.fit_transform(X_scaled)
 
 cluster_data["PCA1"] = X_pca[:, 0]
 cluster_data["PCA2"] = X_pca[:, 1]
 
-print(f"\n✓ PCA variance explained:")
+print("\n✓ PCA variance explained:")
 print(f"  PC1: {pca.explained_variance_ratio_[0]:.1%}")
 print(f"  PC2: {pca.explained_variance_ratio_[1]:.1%}")
 print(f"  Total: {pca.explained_variance_ratio_.sum():.1%}")
 
-# Create PCA scatter plot
 fig_pca = px.scatter(
     cluster_data,
     x="PCA1",
@@ -424,14 +353,11 @@ fig_pca.update_layout(template="plotly_white", height=600, font=dict(size=12))
 
 fig_pca.show()
 
-# ===========================
-# 15. CLUSTER PROFILING
-# ===========================
+# Cluster Profiling
 print("\n" + "=" * 60)
 print("CLUSTER PROFILING")
 print("=" * 60)
 
-# Calculate mean values for each cluster (on original scale)
 profile_features = (
     ["Recency", "Frequency", "Monetary", "Age"] + category_cols + mall_cols
 )
@@ -452,7 +378,6 @@ print(profile_df[category_cols].round(3))
 print("\n--- Mall Preferences (proportions) ---")
 print(profile_df[mall_cols].round(3))
 
-# Gender and Payment method distribution per cluster
 print("\n--- Gender Distribution (%) ---")
 gender_dist = pd.crosstab(
     cluster_data["Cluster"], cluster_data["Gender"], normalize="index"
@@ -465,9 +390,7 @@ payment_dist = pd.crosstab(
 )
 print((payment_dist * 100).round(1))
 
-# ===========================
-# 16. AUTO-NAME CLUSTERS (Business-Friendly Labels)
-# ===========================
+# Cluster Naming & Interpretation
 print("\n" + "=" * 60)
 print("CLUSTER NAMING & INTERPRETATION")
 print("=" * 60)
@@ -480,7 +403,6 @@ def name_cluster(cluster_id, profile_row, size):
     frequency = profile_row["Frequency"]
     monetary = profile_row["Monetary"]
 
-    # Identify dominant category
     cat_cols_list = [col for col in profile_row.index if col.startswith("Category_")]
     if cat_cols_list:
         dominant_category = max(cat_cols_list, key=lambda x: profile_row[x])
@@ -490,7 +412,6 @@ def name_cluster(cluster_id, profile_row, size):
         dominant_cat_name = "General"
         cat_strength = 0
 
-    # Identify dominant mall
     mall_cols_list = [col for col in profile_row.index if col.startswith("Mall_")]
     if mall_cols_list:
         dominant_mall = max(mall_cols_list, key=lambda x: profile_row[x])
@@ -498,12 +419,10 @@ def name_cluster(cluster_id, profile_row, size):
     else:
         mall_name = "Mixed"
 
-    # Classify based on RFM
     is_high_value = monetary > profile_df["Monetary"].median()
     is_frequent = frequency > profile_df["Frequency"].median()
     is_recent = recency < profile_df["Recency"].median()
 
-    # Generate name
     if is_high_value and is_frequent and is_recent:
         tier = "VIP"
     elif is_high_value and is_frequent:
@@ -517,19 +436,16 @@ def name_cluster(cluster_id, profile_row, size):
     else:
         tier = "Casual"
 
-    # Add category descriptor if strong preference (>40%)
     if cat_strength > 0.4:
         category_desc = f"{dominant_cat_name}-Focused"
     else:
         category_desc = "Omni-Category"
 
-    # Build full name
     cluster_name = f"{tier} {category_desc}"
 
     return cluster_name
 
 
-# Generate names and characteristics
 cluster_names = {}
 cluster_characteristics = {}
 
@@ -542,7 +458,6 @@ for cluster_id in sorted(profile_df.index):
     name = name_cluster(cluster_id, profile_row, size)
     cluster_names[cluster_id] = name
 
-    # Extract key characteristics
     chars = {
         "Size": f"{size} customers ({size_pct:.1f}%)",
         "Avg Spend": f"HKD {profile_row['Monetary']:.0f}",
@@ -551,7 +466,6 @@ for cluster_id in sorted(profile_df.index):
         "Avg Age": f"{profile_row['Age']:.0f} years",
     }
 
-    # Top category
     cat_cols_list = [col for col in profile_row.index if col.startswith("Category_")]
     if cat_cols_list:
         top_cat = max(cat_cols_list, key=lambda x: profile_row[x])
@@ -559,7 +473,6 @@ for cluster_id in sorted(profile_df.index):
             f"{top_cat.replace('Category_', '')} ({profile_row[top_cat] * 100:.0f}%)"
         )
 
-    # Preferred mall
     mall_cols_list = [col for col in profile_row.index if col.startswith("Mall_")]
     if mall_cols_list:
         top_mall = max(mall_cols_list, key=lambda x: profile_row[x])
@@ -579,17 +492,13 @@ for cluster_id in sorted(profile_df.index):
     )
     print()
 
-# Add cluster names to main dataframe
 cluster_data["Cluster_Name"] = cluster_data["Cluster"].map(cluster_names)
 
-# ===========================
-# 17. STRATEGIC RECOMMENDATIONS
-# ===========================
+# Strategic Recommendations
 print("=" * 60)
 print("STRATEGIC RECOMMENDATIONS")
 print("=" * 60)
 
-# Identify target segment (highest CLV potential)
 profile_df["CLV_Score"] = (
     profile_df["Monetary"] * profile_df["Frequency"] / (profile_df["Recency"] + 1)
 )
@@ -597,12 +506,11 @@ target_cluster = profile_df["CLV_Score"].idxmax()
 target_name = cluster_names[target_cluster]
 
 print(f"\n🎯 TARGET SEGMENT: Cluster {target_cluster} - {target_name}")
-print(f"   Why: Highest CLV potential (Spend × Frequency / Recency)")
+print("   Why: Highest CLV potential (Spend × Frequency / Recency)")
 print(f"   Size: {cluster_characteristics[target_cluster]['Size']}")
 print(f"   Value: {cluster_characteristics[target_cluster]['Avg Spend']}")
 print()
 
-# Generate acquisition & retention tactics for each cluster
 print("\n💡 RECOMMENDED TACTICS BY SEGMENT:\n")
 
 for cluster_id in sorted(profile_df.index):
@@ -610,11 +518,9 @@ for cluster_id in sorted(profile_df.index):
     profile_row = profile_df.loc[cluster_id]
     chars = cluster_characteristics[cluster_id]
 
-    # Get payment preference
     payment_pref = payment_dist.loc[cluster_id].idxmax()
     payment_pct = payment_dist.loc[cluster_id].max() * 100
 
-    # Get top category
     cat_cols_list = [col for col in profile_row.index if col.startswith("Category_")]
     if cat_cols_list:
         top_cat = max(cat_cols_list, key=lambda x: profile_row[x])
@@ -624,7 +530,6 @@ for cluster_id in sorted(profile_df.index):
         top_cat_name = "General"
         top_cat_pct = 0
 
-    # Get mall preference
     mall_cols_list = [col for col in profile_row.index if col.startswith("Mall_")]
     if mall_cols_list:
         top_mall = max(mall_cols_list, key=lambda x: profile_row[x])
@@ -637,7 +542,6 @@ for cluster_id in sorted(profile_df.index):
     )
     print(f"{'=' * 60}")
 
-    # ACQUISITION TACTIC
     print("📈 ACQUISITION:")
     if payment_pref == "Mobile Payment" and payment_pct > 50:
         print(f"   → App-First Campaign: {payment_pct:.0f}% use mobile payment")
@@ -648,15 +552,14 @@ for cluster_id in sorted(profile_df.index):
     elif top_cat_pct > 40:
         print(f"   → Category-Targeted Ads: {top_cat_pct:.0f}% prefer {top_cat_name}")
         print(f"      • Offer: 15% off first {top_cat_name} purchase + free shipping")
-        print(f"      • Channel: Google Shopping & Facebook lookalike audiences")
+        print("      • Channel: Google Shopping & Facebook lookalike audiences")
     else:
-        print(f"   → Omnichannel Campaign: Diverse shopping behavior")
-        print(f"      • Offer: HKD 100 off first purchase over HKD 500")
-        print(f"      • Channel: Broad digital + in-mall signage at {top_mall_name}")
+        print("   → Omnichannel Campaign: Diverse shopping behavior")
+        print("      • Offer: HKD 100 off first purchase over HKD 500")
+        print("      • Channel: Broad digital + in-mall signage at {top_mall_name}")
 
     print()
 
-    # RETENTION TACTIC
     print("🔄 RETENTION:")
     if (
         profile_row["Frequency"] > profile_df["Frequency"].median()
@@ -665,7 +568,7 @@ for cluster_id in sorted(profile_df.index):
         print(
             f"   → VIP Loyalty Program: High frequency ({profile_row['Frequency']:.1f}) & spend (HKD {profile_row['Monetary']:.0f})"
         )
-        print(f"      • Offer: Early access to sales + free gift after 3 purchases")
+        print("      • Offer: Early access to sales + free gift after 3 purchases")
         print(
             f"      • Trigger: Automated after reaching HKD {profile_row['Monetary'] * 0.8:.0f} spend"
         )
@@ -674,7 +577,7 @@ for cluster_id in sorted(profile_df.index):
             f"   → Win-Back Campaign: {profile_row['Recency']:.0f} days since last visit"
         )
         print(f"      • Offer: 'We miss you' - 20% off {top_cat_name} valid 7 days")
-        print(f"      • Channel: Email + SMS if opted in")
+        print("      • Channel: Email + SMS if opted in")
     elif top_cat_pct > 40:
         print(
             f"   → Category Bundle Deals: Strong {top_cat_name} preference ({top_cat_pct:.0f}%)"
@@ -682,20 +585,17 @@ for cluster_id in sorted(profile_df.index):
         print(f"      • Offer: Buy 2 {top_cat_name} items, get 10% off total basket")
         print(f"      • Timing: Monthly on {payment_pref} paydays")
     else:
-        print(f"   → Points-Based Loyalty: Moderate engagement")
-        print(f"      • Offer: 1 point per HKD 10, redeem at 100 points")
+        print("   → Points-Based Loyalty: Moderate engagement")
+        print("      • Offer: 1 point per HKD 10, redeem at 100 points")
         print(f"      • Channel: {payment_pref}-enabled digital wallet integration")
 
     print()
 
-# ===========================
-# 18. POSITIONING MAP
-# ===========================
+# Positioning Map
 print("\n" + "=" * 60)
 print("POSITIONING MAP VISUALIZATION")
 print("=" * 60)
 
-# Create positioning map: Spend vs Frequency
 fig_positioning = px.scatter(
     profile_df.reset_index(),
     x="Frequency",
@@ -712,7 +612,6 @@ fig_positioning = px.scatter(
     size_max=60,
 )
 
-# Add cluster names as annotations
 for idx, row in profile_df.reset_index().iterrows():
     cluster_id = row["Cluster"]
     fig_positioning.add_annotation(
@@ -754,19 +653,15 @@ fig_positioning.add_vline(
 
 fig_positioning.show()
 
-# ===========================
-# 19. SAVE FINAL RESULTS
-# ===========================
+# Save Results
 print("\n" + "=" * 60)
 print("SAVING RESULTS")
 print("=" * 60)
 
-# Save clustered data
 clustered_file = os.path.join(script_dir, "clustered_customers.csv")
 cluster_data.to_csv(clustered_file, index=False)
 print(f"\n✓ Clustered customer data saved to {clustered_file}")
 
-# Save cluster profiles with names
 profile_df["Cluster_Name"] = profile_df.index.map(cluster_names)
 profile_df["Size"] = profile_df.index.map(cluster_sizes)
 profile_df["Size_Pct"] = (profile_df["Size"] / len(cluster_data) * 100).round(1)
@@ -775,7 +670,6 @@ profile_file = os.path.join(script_dir, "cluster_profiles.csv")
 profile_df.to_csv(profile_file)
 print(f"✓ Cluster profiles saved to {profile_file}")
 
-# Save detailed recommendations
 recommendations = []
 for cluster_id in sorted(profile_df.index):
     recommendations.append(
