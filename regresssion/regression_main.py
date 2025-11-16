@@ -9,9 +9,9 @@ from sklearn.metrics import classification_report, accuracy_score, mean_squared_
 
 
 # Load csv data
-sales_data = pd.read_csv('datas/sales_15.csv')
-customers_data = pd.read_csv('datas/customers_15.csv')
-products_data = pd.read_csv('datas/products_15.csv')
+sales_data = pd.read_csv('sales_15.csv')
+customers_data = pd.read_csv('customers_15.csv')
+products_data = pd.read_csv('products_15.csv')
 
 print(sales_data.head())
 
@@ -119,8 +119,8 @@ importances_class = classification_pipeline.named_steps['classifier'].feature_im
 features_class = classification_pipeline.named_steps['preprocessor'].get_feature_names_out()
 
 feature_importance_class_df = pd.DataFrame({'Feature': features_class, 'Importance': importances_class})
-feature_importance_class_df.to_csv('out/feature_importances_classification.csv', index=False)
+feature_importance_class_df.to_csv('regression/feature_importances_classification.csv', index=False)
 
 # Save coefficients for regression model
 coefficients_reg = pd.Series(regression_pipeline.named_steps['regressor'].coef_, index=regression_pipeline.named_steps['preprocessor'].get_feature_names_out())
-coefficients_reg.to_csv('out/regression_coefficients.csv')
+coefficients_reg.to_csv('regression/regression_coefficients.csv')
