@@ -7,13 +7,10 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, accuracy_score, mean_squared_error, r2_score
 
-
 # Load csv data
 sales_data = pd.read_csv('sales_15.csv')
 customers_data = pd.read_csv('customers_15.csv')
 products_data = pd.read_csv('products_15.csv')
-
-print(sales_data.head())
 
 # Preprocess Sales Data
 # Split product ids into separate rows
@@ -111,16 +108,55 @@ y_pred_reg = regression_pipeline.predict(X_test_reg)
 mse = mean_squared_error(y_test_reg, y_pred_reg)
 r2 = r2_score(y_test_reg, y_pred_reg)
 
+
+# # # # # # # # # 
+# 3rd regression: 
+# # # # # # # # # 
+y_regression_age = merged_data['Age']  # Dependent variable
+X_regression_age = merged_data[['Price', 'Payment method', 'Year', 'Month', 'Day', 'Shopping mall', 'Day of Week']]  # Independent variables
+
+# Create a preprocessing pipeline for regression
+regression_preprocessor_age = ColumnTransformer(
+    transformers=[
+        ('num', 'passthrough', ['Price', 'Year', 'Month', 'Day']),
+        ('cat', OneHotEncoder(drop='first'), ['Payment method', 'Shopping mall', 'Day of Week'])
+    ])
+
+# Create a pipeline with preprocessing and the Linear Regression model
+regression_pipeline_age = Pipeline(steps=[
+    ('preprocessor', regression_preprocessor_age),
+    ('regressor', LinearRegression())
+])
+
+# Split the data into training and test sets for age regression
+X_train_reg_age, X_test_reg_age, y_train_reg_age, y_test_reg_age = train_test_split(X_regression_age, y_regression_age, test_size=0.2, random_state=42)
+
+# Fit the model for age regression
+regression_pipeline_age.fit(X_train_reg_age, y_train_reg_age)
+
+# Make predictions for age regression
+y_pred_reg_age = regression_pipeline_age.predict(X_test_reg_age)
+
+# Evaluate the age regression model
+mse_age = mean_squared_error(y_test_reg_age, y_pred_reg_age)
+r2_age = r2_score(y_test_reg_age, y_pred_reg_age)
+
+
 print(f'Regression Mean Squared Error: {mse}')
 print(f'Regression R-squared: {r2}')
 
-# Save feature importances for classification model
+# Save feature importances for (1st) classification model
 importances_class = classification_pipeline.named_steps['classifier'].feature_importances_
 features_class = classification_pipeline.named_steps['preprocessor'].get_feature_names_out()
 
 feature_importance_class_df = pd.DataFrame({'Feature': features_class, 'Importance': importances_class})
 feature_importance_class_df.to_csv('regression/feature_importances_classification.csv', index=False)
 
-# Save coefficients for regression model
+# Save coefficients for (2nd) price regression model
 coefficients_reg = pd.Series(regression_pipeline.named_steps['regressor'].coef_, index=regression_pipeline.named_steps['preprocessor'].get_feature_names_out())
-coefficients_reg.to_csv('regression/regression_coefficients.csv')
+coefficients_reg.to_csv('regression/regression_coefficients_price.csv')
+
+# Save coefficients for (3rd) age regression model
+coefficients_reg_age = pd.Series(regression_pipeline_age.named_steps['regressor'].coef_, index=regression_pipeline_age.named_steps['preprocessor'].get_feature_names_out())
+coefficients_reg_age.to_csv('regression/regression_coefficients_age.csv')
+
