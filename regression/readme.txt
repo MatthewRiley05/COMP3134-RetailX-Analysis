@@ -1,5 +1,5 @@
 How to run:
-1. Install Python 3, pandas and scikit-learn
+1. Install Python 3, pandas, scikit-learn, matplotlib and seaborn
 2. Run the regression_main.py file
 3. Results will be printed to the console and output files will be made in the "regression" folder
 
