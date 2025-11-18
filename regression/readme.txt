@@ -68,51 +68,6 @@ cat__Day of Week_Wednesday (-8.76):
 Shopping on Wednesday results in a slight decrease in price (approximately 8.76 units), but much less significant than the other days.
 
 
-3. regression_coefficients_age.csv (Predicting age)
-Numeric Features
-num__Price (2.82e-05):
-A very small positive coefficient indicates that for each unit increase in product price, the predicted age increases by approximately 0.0000282 years (or about 0.01 days). This suggests that higher-priced products might be associated, albeit very weakly, with slightly older customers. However, the effect is negligible.
-
-num__Year (0.3353):
-For each additional year in the dataset's timeline, the predicted age increases by about 0.3353 years. This could reflect that over time, customers in the dataset have aged, or it could indicate that the dataset's customer base has shifted to older demographics in more recent years.
-
-num__Month (-0.0718):
-Each additional month results in a slight decrease in predicted age of about 0.0718 years. This suggests a potential trend where, in later months, the customers may be younger, possibly due to seasonal purchasing patterns.
-
-num__Day (-0.0201):
-A one-day increase corresponds to a small decrease in predicted age of approximately 0.0201 years. This aligns with the earlier point indicating that shopping later in the month could coincide with younger customers.
-
-
-Categorical Features
-cat__Payment method_Credit Card (0.3454):
-Customers who pay with a credit card are predicted to be approximately 0.3454 years older than those using other payment methods. This could suggest that older individuals are more likely to use credit cards for purchases, possibly reflecting their financial habits or access to credit.
-
-cat__Payment method_Mobile Payment (-1.32):
-Using mobile payment methods is associated with a decrease in predicted age by about 1.32 years. This indicates that mobile payment users are generally younger, which may reflect familiarity with technology among younger demographics.
-
-cat__Shopping mall_MK (-0.1942):
-Shopping at mall MK correlates with a decrease in predicted age of approximately 0.1942 years. This implies that younger shoppers frequent this mall compared to others.
-
-cat__Shopping mall_ST (-0.8134):
-Shopping at mall ST is associated with a decrease in predicted age by about 0.8134 years. This mall likely attracts a younger demographic as well.
-
-cat__Shopping mall_TKO (-0.8314):
-Shopping at TKO shows an even greater predicted decrease in age (about 0.8314 years), suggesting this mall has a significantly younger clientele.
-
-cat__Day of Week_Monday (-0.1530):
-Shopping on Monday is linked to a predicted decrease in age of about 0.1530 years, indicating that younger customers may be more active in shopping at the beginning of the week.
-
-cat__Day of Week_Saturday (1.0892):
-Conversely, shopping on Saturday is associated with an increase in predicted age of about 1.0892 years. This suggests that older customers are more likely to shop on weekends.
-
-cat__Day of Week_Sunday (-0.1826):
-Purchasing on Sunday results in a predicted decrease in age of about 0.1826 years, indicating a younger customer base shopping on Sundays.
-
-cat__Day of Week_Thursday (-0.6560):
-Shopping on Thursday predicts a decrease in age of approximately 0.6560 years, showing that this day tends to attract younger shoppers as well.
-
-cat__Day of Week_Tuesday (-0.7698):
-Similar to Thursday, Tuesday also predicts a decrease in age of about 0.7698 years, once again showing that younger customers are shopping on this day.
-
-cat__Day of Week_Wednesday (-1.7742):
-This day shows the most considerable decrease in predicted age, suggesting that customers shopping on Wednesdays are significantly younger, with a predicted decrease of about 1.77 years.
+3. regression_coefficients_age.csv 
+The coefficient is 4.948687799500338e-07 which is incredibly small, which indicates that the impact of changes in Total Revenue on the predicted age is negligible.
+The age revenue regression.png graph shows little correlation between the two variables.

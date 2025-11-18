@@ -6,6 +6,8 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, accuracy_score, mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Load csv data
 sales_data = pd.read_csv('sales_15.csv')
@@ -112,19 +114,25 @@ r2 = r2_score(y_test_reg, y_pred_reg)
 # # # # # # # # # 
 # 3rd regression: 
 # # # # # # # # # 
+# Count the occurrences of each Product ID
+product_counts = merged_data['Product id list'].value_counts().reset_index()
+product_counts.columns = ['Product id', 'Quantity Sold']
+
+# Merge count data back into merged_data
+merged_data = merged_data.merge(product_counts, left_on='Product id list', right_on='Product id', how='left')
+
+# Calculate total revenue generated from each product sold (Quantity Sold * Price)
+merged_data['Total Revenue'] = merged_data['Quantity Sold'] * merged_data['Price']
+
+# Define independent and dependent variables for the new regression
 y_regression_age = merged_data['Age']  # Dependent variable
-X_regression_age = merged_data[['Price', 'Payment method', 'Year', 'Month', 'Day', 'Shopping mall', 'Day of Week']]  # Independent variables
+X_regression_age = merged_data[['Total Revenue']]  # Independent variable based on product sales
 
-# Create a preprocessing pipeline for regression
-regression_preprocessor_age = ColumnTransformer(
-    transformers=[
-        ('num', 'passthrough', ['Price', 'Year', 'Month', 'Day']),
-        ('cat', OneHotEncoder(drop='first'), ['Payment method', 'Shopping mall', 'Day of Week'])
-    ])
-
-# Create a pipeline with preprocessing and the Linear Regression model
+# Create a preprocessing pipeline for age regression
 regression_pipeline_age = Pipeline(steps=[
-    ('preprocessor', regression_preprocessor_age),
+    ('preprocessor', ColumnTransformer(
+        transformers=[('num', 'passthrough', ['Total Revenue'])]
+    )),
     ('regressor', LinearRegression())
 ])
 
@@ -141,9 +149,24 @@ y_pred_reg_age = regression_pipeline_age.predict(X_test_reg_age)
 mse_age = mean_squared_error(y_test_reg_age, y_pred_reg_age)
 r2_age = r2_score(y_test_reg_age, y_pred_reg_age)
 
+print(f'Regression Mean Squared Error (Age): {mse_age}')
+print(f'Regression R-squared (Age): {r2_age}')
 
-print(f'Regression Mean Squared Error: {mse}')
-print(f'Regression R-squared: {r2}')
+# Visualization of the relationship
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x=X_test_reg_age['Total Revenue'], y=y_test_reg_age, label='Actual Age', color='blue', alpha=0.6)
+sns.scatterplot(x=X_test_reg_age['Total Revenue'], y=y_pred_reg_age, label='Predicted Age', color='orange', alpha=0.6)
+
+# Fit a regression line
+sns.regplot(x=X_test_reg_age['Total Revenue'], y=y_pred_reg_age, scatter=False, color='red', label='Regression Line')
+
+plt.title('Customer Age Prediction Based on Total Revenue')
+plt.xlabel('Total Revenue')
+plt.ylabel('Customer Age')
+plt.legend()
+plt.grid(True)
+plt.show()
+
 
 # Save feature importances for (1st) classification model
 importances_class = classification_pipeline.named_steps['classifier'].feature_importances_
@@ -156,7 +179,7 @@ feature_importance_class_df.to_csv('regression/feature_importances_classificatio
 coefficients_reg = pd.Series(regression_pipeline.named_steps['regressor'].coef_, index=regression_pipeline.named_steps['preprocessor'].get_feature_names_out())
 coefficients_reg.to_csv('regression/regression_coefficients_price.csv')
 
-# Save coefficients for (3rd) age regression model
-coefficients_reg_age = pd.Series(regression_pipeline_age.named_steps['regressor'].coef_, index=regression_pipeline_age.named_steps['preprocessor'].get_feature_names_out())
-coefficients_reg_age.to_csv('regression/regression_coefficients_age.csv')
-
+# Save coefficients for (3rd) amount regression model
+coefficients_reg_age = pd.Series(regression_pipeline_age.named_steps['regressor'].coef_, 
+                                  index=regression_pipeline_age.named_steps['preprocessor'].get_feature_names_out())
+coefficients_reg_age.to_csv('regression/regression_coefficients_age.csv', index=True)
