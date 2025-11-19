@@ -1,17 +1,3 @@
 ,0
-num__Age,0.04868789614243855
-num__Year,19.792257197815456
-num__Month,2.38945867393739
-num__Day,-0.9295678086317519
-cat__Gender_M,-8.277281028599019
-cat__Payment method_Credit Card,2.5130897109749535
-cat__Payment method_Mobile Payment,14.745470892661341
-cat__Shopping mall_MK,-20.104921057980945
-cat__Shopping mall_ST,-20.58240430230076
-cat__Shopping mall_TKO,-9.516538619260732
-cat__Day of Week_Monday,-24.58672047898517
-cat__Day of Week_Saturday,-8.27579607779283
-cat__Day of Week_Sunday,-40.18166009616835
-cat__Day of Week_Thursday,-40.287962934532665
-cat__Day of Week_Tuesday,-28.225019836759927
-cat__Day of Week_Wednesday,-8.761055469849909
+num__Age,0.05511444450707961
+cat__Gender_M,-8.238918386236502

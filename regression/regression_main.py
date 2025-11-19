@@ -6,8 +6,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, accuracy_score, mean_squared_error, r2_score
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 # Load csv data
 sales_data = pd.read_csv('sales_15.csv')
@@ -81,93 +80,36 @@ print('Classification Report:\n', report)
 # 2nd regression: 
 # # # # # # # # # 
 # Define independent and dependent variables for the second regression
-y_regression = merged_data['Price']  # Dependent variable
-X_regression = merged_data[['Gender', 'Age', 'Payment method', 'Year', 'Month', 'Day', 'Shopping mall', 'Day of Week']]  # Independent variables (excluding Product ID list)
+y_regression_price = merged_data['Price']  # Dependent variable
+X_regression_price = merged_data[['Gender', 'Age', 'Payment method', 'Shopping mall', 'Day of Week']]  # Independent variables
 
-# Create a preprocessing pipeline for regression
-regression_preprocessor = ColumnTransformer(
+# Preprocessing for regression, without Quantity Sold
+regression_preprocessor_price = ColumnTransformer(
     transformers=[
         ('num', 'passthrough', ['Age', 'Year', 'Month', 'Day']),
         ('cat', OneHotEncoder(drop='first'), ['Gender', 'Payment method', 'Shopping mall', 'Day of Week'])
     ])
 
-# Create a pipeline with preprocessing and the Linear Regression model
-regression_pipeline = Pipeline(steps=[
-    ('preprocessor', regression_preprocessor),
+regression_pipeline_price = Pipeline(steps=[
+    ('preprocessor', regression_preprocessor_price),
     ('regressor', LinearRegression())
 ])
 
-# Split the data into training and test sets for regression
-X_train_reg, X_test_reg, y_train_reg, y_test_reg = train_test_split(X_regression, y_regression, test_size=0.2, random_state=42)
+# Split the data into training and test sets for price regression
+X_train_reg_price, X_test_reg_price, y_train_reg_price, y_test_reg_price = train_test_split(X_regression_price, y_regression_price, test_size=0.2, random_state=42)
 
-# Fit the model for regression
-regression_pipeline.fit(X_train_reg, y_train_reg)
+# Fit the model for price regression
+regression_pipeline_price.fit(X_train_reg_price, y_train_reg_price)
 
-# Make predictions for regression
-y_pred_reg = regression_pipeline.predict(X_test_reg)
+# Make predictions for price regression
+y_pred_reg_price = regression_pipeline_price.predict(X_test_reg_price)
 
-# Evaluate the regression model
-mse = mean_squared_error(y_test_reg, y_pred_reg)
-r2 = r2_score(y_test_reg, y_pred_reg)
+# Evaluate the price regression model
+mse_price = mean_squared_error(y_test_reg_price, y_pred_reg_price)
+r2_price = r2_score(y_test_reg_price, y_pred_reg_price)
 
-
-# # # # # # # # # 
-# 3rd regression: 
-# # # # # # # # # 
-# Count the occurrences of each Product ID
-product_counts = merged_data['Product id list'].value_counts().reset_index()
-product_counts.columns = ['Product id', 'Quantity Sold']
-
-# Merge count data back into merged_data
-merged_data = merged_data.merge(product_counts, left_on='Product id list', right_on='Product id', how='left')
-
-# Calculate total revenue generated from each product sold (Quantity Sold * Price)
-merged_data['Total Revenue'] = merged_data['Quantity Sold'] * merged_data['Price']
-
-# Define independent and dependent variables for the new regression
-y_regression_age = merged_data['Age']  # Dependent variable
-X_regression_age = merged_data[['Total Revenue']]  # Independent variable based on product sales
-
-# Create a preprocessing pipeline for age regression
-regression_pipeline_age = Pipeline(steps=[
-    ('preprocessor', ColumnTransformer(
-        transformers=[('num', 'passthrough', ['Total Revenue'])]
-    )),
-    ('regressor', LinearRegression())
-])
-
-# Split the data into training and test sets for age regression
-X_train_reg_age, X_test_reg_age, y_train_reg_age, y_test_reg_age = train_test_split(X_regression_age, y_regression_age, test_size=0.2, random_state=42)
-
-# Fit the model for age regression
-regression_pipeline_age.fit(X_train_reg_age, y_train_reg_age)
-
-# Make predictions for age regression
-y_pred_reg_age = regression_pipeline_age.predict(X_test_reg_age)
-
-# Evaluate the age regression model
-mse_age = mean_squared_error(y_test_reg_age, y_pred_reg_age)
-r2_age = r2_score(y_test_reg_age, y_pred_reg_age)
-
-print(f'Regression Mean Squared Error (Age): {mse_age}')
-print(f'Regression R-squared (Age): {r2_age}')
-
-# Visualization of the relationship
-plt.figure(figsize=(10, 6))
-sns.scatterplot(x=X_test_reg_age['Total Revenue'], y=y_test_reg_age, label='Actual Age', color='blue', alpha=0.6)
-sns.scatterplot(x=X_test_reg_age['Total Revenue'], y=y_pred_reg_age, label='Predicted Age', color='orange', alpha=0.6)
-
-# Fit a regression line
-sns.regplot(x=X_test_reg_age['Total Revenue'], y=y_pred_reg_age, scatter=False, color='red', label='Regression Line')
-
-plt.title('Customer Age Prediction Based on Total Revenue')
-plt.xlabel('Total Revenue')
-plt.ylabel('Customer Age')
-plt.legend()
-plt.grid(True)
-plt.show()
-
-
+print(f'Regression Mean Squared Error (Price): {mse_price}')
+print(f'Regression R-squared (Price): {r2_price}')
 # Save feature importances for (1st) classification model
 importances_class = classification_pipeline.named_steps['classifier'].feature_importances_
 features_class = classification_pipeline.named_steps['preprocessor'].get_feature_names_out()
@@ -176,10 +118,6 @@ feature_importance_class_df = pd.DataFrame({'Feature': features_class, 'Importan
 feature_importance_class_df.to_csv('regression/feature_importances_classification.csv', index=False)
 
 # Save coefficients for (2nd) price regression model
-coefficients_reg = pd.Series(regression_pipeline.named_steps['regressor'].coef_, index=regression_pipeline.named_steps['preprocessor'].get_feature_names_out())
+coefficients_reg = pd.Series(regression_pipeline_price.named_steps['regressor'].coef_, index=regression_pipeline_price.named_steps['preprocessor'].get_feature_names_out())
 coefficients_reg.to_csv('regression/regression_coefficients_price.csv')
 
-# Save coefficients for (3rd) amount regression model
-coefficients_reg_age = pd.Series(regression_pipeline_age.named_steps['regressor'].coef_, 
-                                  index=regression_pipeline_age.named_steps['preprocessor'].get_feature_names_out())
-coefficients_reg_age.to_csv('regression/regression_coefficients_age.csv', index=True)
